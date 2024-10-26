@@ -6,6 +6,7 @@ import random
 import threading
 import json
 
+from PIL import Image
 
 import requests
 from urllib.parse import urlparse, unquote
@@ -88,6 +89,27 @@ class DifyBot(Bot):
             logger.exception(error_info)
             return None, error_info
 
+
+    def _dealwithStream(self, response):
+        complete_answer = ""
+
+        # Process the streaming response
+        for line in response.iter_lines():
+            if line:
+                decoded_line = line.decode('utf-8')
+                # Check if the line contains "data:" which holds the actual message
+                if decoded_line.startswith("data: "):
+                    try:
+                        # Parse the JSON content in the "data" field
+                        rsp_data = json.loads(decoded_line[6:])
+                        # Check if "answer" field exists and append it to the sentence
+                        if "answer" in rsp_data and rsp_data["answer"].strip():
+                            complete_answer += rsp_data["answer"]
+                    except json.JSONDecodeError:
+                        # In case there's a parsing error, skip to the next line
+                        continue
+        return rsp_data, complete_answer
+
     def _handle_chatbot(self, query: str, session: DifySession, context: Context):
         api_key = self._get_dify_conf(context, "dify_api_key", '')
         api_base = self._get_dify_conf(context, "dify_api_base", "https://api.dify.ai/v1")
@@ -109,7 +131,7 @@ class DifyBot(Bot):
             logger.warn(error_info)
             return None, error_info
 
-        # response:
+        # response(blocking):
         # {
         #     "event": "message",
         #     "message_id": "9da23599-e713-473b-982c-4328d4f5c78a",
@@ -123,12 +145,22 @@ class DifyBot(Bot):
         #     },
         #     "created_at": 1705407629
         # }
-        rsp_data = response.json()
-        logger.debug("[DIFY] usage {}".format(rsp_data.get('metadata', {}).get('usage', 0)))
 
-        answer = rsp_data['answer']
-        parsed_content = parse_markdown_text(answer)
+        # response(streaming):
+        #
+        #event: ping
+        # data: {"event": "message", "conversation_id": "fe134579-f2aa-4ceb-8090-f974bc32c1af", "message_id": "417da858-2a76-4cbb-8fd1-e277dc5cb0e5", "created_at": 1729611314, "task_id": "2eddc385-6a25-48ca-8ee7-69cae3a788f2", "id": "417da858-2a76-4cbb-8fd1-e277dc5cb0e5", "answer": " ", "from_variable_selector": null}
+        # data: {"event": "message", "conversation_id": "fe134579-f2aa-4ceb-8090-f974bc32c1af", "message_id": "417da858-2a76-4cbb-8fd1-e277dc5cb0e5", "created_at": 1729611314, "task_id": "2eddc385-6a25-48ca-8ee7-69cae3a788f2", "id": "417da858-2a76-4cbb-8fd1-e277dc5cb0e5", "answer": "H", "from_variable_selector": null}
+        if response_mode == 'blocking':
+            rsp_data = response.json()
+            logger.debug("[DIFY] usage {}".format(rsp_data.get('metadata', {}).get('usage', 0)))
 
+            answer = rsp_data['answer']
+            parsed_content = parse_markdown_text(answer)
+        elif response_mode == 'streaming':
+            rsp_data, answer = self._dealwithStream(response)
+            logger.debug("[DIFY] usage {}".format(rsp_data.get('metadata', {}).get('usage', 0)))
+            parsed_content = parse_markdown_text(answer)
         # {"answer": "![image](/files/tools/dbf9cd7c-2110-4383-9ba8-50d9fd1a4815.png?timestamp=1713970391&nonce=0d5badf2e39466042113a4ba9fd9bf83&sign=OVmdCxCEuEYwc9add3YNFFdUpn4VdFKgl84Cg54iLnU=)"}
         at_prefix = ""
         channel = context.get("channel")
@@ -168,6 +200,8 @@ class DifyBot(Bot):
                 at_prefix = "@" + context["msg"].actual_user_nickname + "\n"
                 content = at_prefix + content
             final_reply = Reply(ReplyType.TEXT, final_item['content'])
+            # image = self._load_local_image()
+            # final_reply = Reply(ReplyType.IMAGE, image)
         elif final_item['type'] == 'image':
             image_url = self._fill_file_base_url(final_item['content'])
             image = self._download_image(image_url)
@@ -207,21 +241,61 @@ class DifyBot(Bot):
             logger.error(f"Error downloading {url}: {e}")
         return None
 
+    def _load_local_image(self):
+        try:
+            image_path = r"D:\desktop\个人信息及各文档\1\微信图片_20190618113648.png"
+            with open(image_path, "rb") as image_file:
+                image_storage = io.BytesIO(image_file.read())
+                size = image_storage.getbuffer().nbytes
+                logger.debug(f"[WX] load local image success, size={size}, img_path={image_path}")
+                image_storage.seek(0)
+                return image_storage
+        except Exception as e:
+            logger.error(f"Error loading image from {image_path}: {e}")
+            return None
+
+    # def _download_image(self, url):
+    #     try:
+    #         pic_res = requests.get(url, stream=True)
+    #         pic_res.raise_for_status()
+    #         image_storage = io.BytesIO()
+    #         size = 0
+    #         for block in pic_res.iter_content(1024):
+    #             size += len(block)
+    #             image_storage.write(block)
+    #         logger.debug(f"[WX] download image success, size={size}, img_url={url}")
+    #         image_storage.seek(0)
+    #         return image_storage
+    #     except Exception as e:
+    #         logger.error(f"Error downloading {url}: {e}")
+    #     return None
+
     def _download_image(self, url):
         try:
+            # 下载图片
             pic_res = requests.get(url, stream=True)
             pic_res.raise_for_status()
+
+            # 将下载的图片保存到内存
             image_storage = io.BytesIO()
-            size = 0
             for block in pic_res.iter_content(1024):
-                size += len(block)
                 image_storage.write(block)
-            logger.debug(f"[WX] download image success, size={size}, img_url={url}")
             image_storage.seek(0)
-            return image_storage
+
+            # 使用 Pillow 重新保存为 PNG 格式
+            img = Image.open(image_storage)
+            png_storage = io.BytesIO()
+            img.convert("RGBA").save(png_storage, format="PNG")
+            
+            png_size = png_storage.getbuffer().nbytes
+            logger.debug(f"[WX] download and converted image to PNG, size={png_size}, img_url={url}")
+
+            png_storage.seek(0)
+            return png_storage
+
         except Exception as e:
-            logger.error(f"Error downloading {url}: {e}")
-        return None
+            logger.error(f"Error downloading or converting {url}: {e}")
+            return None
 
     def _handle_agent(self, query: str, session: DifySession, context: Context):
         api_key = self._get_dify_conf(context, "dify_api_key", '')
