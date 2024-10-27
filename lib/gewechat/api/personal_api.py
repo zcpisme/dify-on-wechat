@@ -41,7 +41,7 @@ class PersonalApi:
             "appId": app_id,
             "city": city,
             "country": country,
-            "nickName": nick_name,
+            "remarkName": nick_name,
             "province": province,
             "sex": sex,
             "signature": signature

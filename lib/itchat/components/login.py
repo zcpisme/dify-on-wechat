@@ -88,7 +88,7 @@ def login(self, enableCmdQR=False, picDir=None, qrCallback=None,
         # utils.clear_screen()
         if os.path.exists(picDir or config.DEFAULT_QR):
             os.remove(picDir or config.DEFAULT_QR)
-        logger.info('Login successfully as %s' % self.storageClass.nickName)
+        logger.info('Login successfully as %s' % self.storageClass.remarkName)
     self.start_receiving(exitCallback)
     self.isLogging = False
 
@@ -249,7 +249,7 @@ def web_init(self):
     self.loginInfo['synckey'] = '|'.join(['%s_%s' % (item['Key'], item['Val'])
                                           for item in dic['SyncKey']['List']])
     self.storageClass.userName = dic['User']['UserName']
-    self.storageClass.nickName = dic['User']['NickName']
+    self.storageClass.remarkName = dic['User']['RemarkName']
     # deal with contact list returned when init
     contactList = dic.get('ContactList', [])
     chatroomList, otherList = [], []

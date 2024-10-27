@@ -35,7 +35,7 @@ class GroupApi:
         """修改我在群内的昵称"""
         param = {
             "appId": app_id,
-            "nickName": nick_name,
+            "remarkName": nick_name,
             "chatroomId": chatroom_id
         }
         return post_json(self.base_url, "/group/modifyChatroomNickNameForSelf", self.token, param)

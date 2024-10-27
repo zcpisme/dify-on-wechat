@@ -32,7 +32,7 @@ class Core(object):
             for log in
                 - a QR code will be downloaded and opened
                 - then scanning status is logged, it paused for you confirm
-                - finally it logged in and show your nickName
+                - finally it logged in and show your remarkName
             for options
                 - enableCmdQR: show qrcode in command line
                     - integers can be used to fit strange char length
@@ -401,7 +401,7 @@ class Core(object):
             for log in
                 - a QR code will be downloaded and opened
                 - then scanning status is logged, it paused for you confirm
-                - finally it logged in and show your nickName
+                - finally it logged in and show your remarkName
             for options
                 - hotReload: enable hot reload
                 - statusStorageDir: dir for storing log in status

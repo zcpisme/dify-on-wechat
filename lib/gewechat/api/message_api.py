@@ -72,7 +72,7 @@ class MessageApi:
         param = {
             "appId": app_id,
             "toWxid": to_wxid,
-            "nickName": nick_name,
+            "remarkName": nick_name,
             "nameCardWxid": name_card_wxid
         }
         return post_json(self.base_url, "/message/postNameCard", self.token, param)

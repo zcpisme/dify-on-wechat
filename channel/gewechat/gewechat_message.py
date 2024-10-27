@@ -47,7 +47,7 @@ class GeWeChatMessage(ChatMessage):
         brief_info = self.client.get_brief_info(self.app_id, [self.other_user_id])
         if brief_info['ret'] == 200 and brief_info['data']:
             info = brief_info['data'][0]
-            self.other_user_nickname = info.get('nickName', '')
+            self.other_user_nickname = info.get('remarkName', '')
             if self.other_user_nickname is None:
                 self.other_user_nickname = self.other_user_id
 
@@ -58,7 +58,7 @@ class GeWeChatMessage(ChatMessage):
             # 获取实际发送者信息
             actual_user_info = self.client.get_brief_info(self.app_id, [self.actual_user_id])
             if actual_user_info['ret'] == 200 and actual_user_info['data']:
-                self.actual_user_nickname = actual_user_info['data'][0].get('nickName', '')
+                self.actual_user_nickname = actual_user_info['data'][0].get('remarkName', '')
                 if self.actual_user_nickname is None:
                     self.actual_user_nickname = self.actual_user_id
             else:
