@@ -241,6 +241,7 @@ def web_init(self):
     dic = json.loads(r.content.decode('utf-8', 'replace'))
     # deal with login info
     utils.emoji_formatter(dic['User'], 'NickName')
+    utils.emoji_formatter(dic['User'], 'RemarkName')
     self.loginInfo['InviteStartCount'] = int(dic['InviteStartCount'])
     self.loginInfo['User'] = wrap_user_dict(
         utils.struct_friend_info(dic['User']))
@@ -250,6 +251,7 @@ def web_init(self):
                                           for item in dic['SyncKey']['List']])
     self.storageClass.userName = dic['User']['UserName']
     self.storageClass.nickName = dic['User']['NickName']
+    self.storageClass.remarkName = dic['User']['RemarkName']
     # deal with contact list returned when init
     contactList = dic.get('ContactList', [])
     chatroomList, otherList = [], []

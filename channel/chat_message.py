@@ -42,10 +42,13 @@ class ChatMessage(object):
 
     from_user_id = None
     from_user_nickname = None
+    from_user_remarkname = None
     to_user_id = None
     to_user_nickname = None
+    to_user_remarkname = None
     other_user_id = None
     other_user_nickname = None
+    other_user_remarkname = None
     my_msg = False
     self_display_name = None
 
@@ -53,6 +56,7 @@ class ChatMessage(object):
     is_at = False
     actual_user_id = None
     actual_user_nickname = None
+    actual_user_remarkname = None
     at_list = None
 
     _prepare_fn = None
@@ -68,20 +72,24 @@ class ChatMessage(object):
             self._prepare_fn()
 
     def __str__(self):
-        return "ChatMessage: id={}, create_time={}, ctype={}, content={}, from_user_id={}, from_user_nickname={}, to_user_id={}, to_user_nickname={}, other_user_id={}, other_user_nickname={}, is_group={}, is_at={}, actual_user_id={}, actual_user_nickname={}, at_list={}".format(
+        return "ChatMessage: id={}, create_time={}, ctype={}, content={}, from_user_id={}, from_user_nickname={},from_user_remarkname={}, to_user_id={}, to_user_nickname={},to_user_remarkname={}, other_user_id={}, other_user_nickname={},other_user_remarkname={}, is_group={}, is_at={}, actual_user_id={}, actual_user_nickname={},actual_user_remarkname={}, at_list={}".format(
             self.msg_id,
             self.create_time,
             self.ctype,
             self.content,
             self.from_user_id,
             self.from_user_nickname,
+            self.from_user_remarkname,
             self.to_user_id,
             self.to_user_nickname,
+            self.to_user_remarkname,
             self.other_user_id,
             self.other_user_nickname,
+            self.other_user_remarkname,
             self.is_group,
             self.is_at,
             self.actual_user_id,
             self.actual_user_nickname,
+            self.actual_user_remarkname,
             self.at_list
         )

@@ -236,6 +236,7 @@ def produce_group_chat(core, msg):
     else:
         msg['ActualUserName'] = core.storageClass.userName
         msg['ActualNickName'] = core.storageClass.nickName
+        msg['ActualRemarkName'] = core.storageClass.remarkName
         msg['IsAt'] = False
         utils.msg_formatter(msg, 'Content')
         return
@@ -249,9 +250,11 @@ def produce_group_chat(core, msg):
     if member is None:
         logger.debug('chatroom member fetch failed with %s' % actualUserName)
         msg['ActualNickName'] = ''
+        msg['ActualRemarkName'] = ''
         msg['IsAt'] = False
     else:
         msg['ActualNickName'] = member.get('DisplayName', '') or member['NickName']
+        msg['ActualRemarkName'] = member.get('DisplayName', '') or member['RemarkName']
         atFlag = '@' + (chatroom['Self'].get('DisplayName', '') or core.storageClass.nickName)
         msg['IsAt'] = (
             (atFlag + (u'\u2005' if u'\u2005' in msg['Content'] else ' '))

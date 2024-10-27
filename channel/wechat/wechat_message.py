@@ -88,23 +88,29 @@ class WechatMessage(ChatMessage):
 
         user_id = itchat.instance.storageClass.userName
         nickname = itchat.instance.storageClass.nickName
+        remarkname = itchat.instance.storageClass.remarkName
 
         # 虽然from_user_id和to_user_id用的少，但是为了保持一致性，还是要填充一下
         # 以下很繁琐，一句话总结：能填的都填了。
         if self.from_user_id == user_id:
             self.from_user_nickname = nickname
+            self.from_user_remarkname = remarkname
         if self.to_user_id == user_id:
             self.to_user_nickname = nickname
+            self.to_user_remarkname = remarkname
         try:  # 陌生人时候, User字段可能不存在
             # my_msg 为True是表示是自己发送的消息
             self.my_msg = itchat_msg["ToUserName"] == itchat_msg["User"]["UserName"] and \
                           itchat_msg["ToUserName"] != itchat_msg["FromUserName"]
             self.other_user_id = itchat_msg["User"]["UserName"]
             self.other_user_nickname = itchat_msg["User"]["NickName"]
+            self.other_user_remarkname = itchat_msg["User"]["RemarkName"]
             if self.other_user_id == self.from_user_id:
                 self.from_user_nickname = self.other_user_nickname
+                self.from_user_remarkname = self.other_user_remarkname
             if self.other_user_id == self.to_user_id:
                 self.to_user_nickname = self.other_user_nickname
+                self.to_user_remarkname = self.other_user_remarkname
             if itchat_msg["User"].get("Self"):
                 # 自身的展示名，当设置了群昵称时，该字段表示群昵称
                 self.self_display_name = itchat_msg["User"].get("Self").get("DisplayName")

@@ -16,6 +16,7 @@ class Storage(object):
     def __init__(self, core):
         self.userName          = None
         self.nickName          = None
+        self.remarkName        = None
         self.updateLock        = Lock()
         self.memberList        = ContactList()
         self.mpList            = ContactList()
@@ -32,6 +33,7 @@ class Storage(object):
         return {
             'userName'          : self.userName,
             'nickName'          : self.nickName,
+            'remarkName'        : self.remarkName,
             'memberList'        : self.memberList,
             'mpList'            : self.mpList,
             'chatroomList'      : self.chatroomList,
@@ -39,6 +41,7 @@ class Storage(object):
     def loads(self, j):
         self.userName = j.get('userName', None)
         self.nickName = j.get('nickName', None)
+        self.remarkName = j.get('remarkName', None)
         del self.memberList[:]
         for i in j.get('memberList', []):
             self.memberList.append(i)
