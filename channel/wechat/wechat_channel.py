@@ -151,7 +151,7 @@ class WechatChannel(ChatChannel):
                 loginCallback=self.loginCallback
             )
             self.user_id = itchat.instance.storageClass.userName
-            self.name = itchat.instance.storageClass.remarkName
+            self.name = itchat.instance.storageClass.nickName
             logger.info("Wechat login success, user_id: {}, nickname: {}".format(self.user_id, self.name))
             # start message listener
             itchat.run()
@@ -231,9 +231,9 @@ class WechatChannel(ChatChannel):
     @_check
     def handle_friend_request(self, cmsg: ChatMessage):
         if cmsg.ctype == ContextType.ACCEPT_FRIEND:
-            logger.debug("[WX]receive friend request: {}".format(cmsg.content["RemarkName"]))
+            logger.debug("[WX]receive friend request: {}".format(cmsg.content["NickName"]))
         else:
-            logger.debug("[WX]receive friend request: {}, cmsg={}".format(cmsg.content["RemarkName"], cmsg))
+            logger.debug("[WX]receive friend request: {}, cmsg={}".format(cmsg.content["NickName"], cmsg))
         context = self._compose_context(cmsg.ctype, cmsg.content, msg=cmsg)
         if context:
             self.produce(context)
@@ -307,13 +307,13 @@ class WechatChannel(ChatChannel):
                         accept_friend_msg = conf().get("accept_friend_msg", "")
                         itchat.send(accept_friend_msg, toUserName=context.content["UserName"])
                     logger.debug("[WX] accept_friend return: {}".format(debug_msg))
-                    logger.info("[WX] Accepted new friend, UserName={}, RemarkName={}".format(context.content["UserName"],
+                    logger.info("[WX] Accepted new friend, UserName={}, NickName={}".format(context.content["UserName"],
                                                                                             context.content[
-                                                                                                "RemarkName"]))
+                                                                                                "NickName"]))
                 except Exception as e:
                     logger.error("[WX] Failed to add friend. Error: {}".format(e))
             else:
-                logger.info("[WX] Ignored new friend, username={}".format(context.content["RemarkName"]))
+                logger.info("[WX] Ignored new friend, username={}".format(context.content["NickName"]))
         elif reply.type == ReplyType.INVITE_ROOM:  # 新增邀请好友进群回复类型
             # 假设 reply.content 包含了群聊的名字
 

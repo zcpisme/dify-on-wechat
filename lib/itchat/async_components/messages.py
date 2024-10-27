@@ -234,7 +234,7 @@ def produce_group_chat(core, msg):
         chatroomUserName = msg['ToUserName']
     else:
         msg['ActualUserName'] = core.storageClass.userName
-        msg['ActualNickName'] = core.storageClass.remarkName
+        msg['ActualNickName'] = core.storageClass.nickName
         msg['IsAt'] = False
         utils.msg_formatter(msg, 'Content')
         return
@@ -250,8 +250,8 @@ def produce_group_chat(core, msg):
         msg['ActualNickName'] = ''
         msg['IsAt'] = False
     else:
-        msg['ActualNickName'] = member.get('DisplayName', '') or member['RemarkName']
-        atFlag = '@' + (chatroom['Self'].get('DisplayName', '') or core.storageClass.remarkName)
+        msg['ActualNickName'] = member.get('DisplayName', '') or member['NickName']
+        atFlag = '@' + (chatroom['Self'].get('DisplayName', '') or core.storageClass.nickName)
         msg['IsAt'] = (
             (atFlag + (u'\u2005' if u'\u2005' in msg['Content'] else ' '))
             in msg['Content'] or msg['Content'].endswith(atFlag))

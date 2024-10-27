@@ -15,7 +15,7 @@ def contact_change(fn):
 class Storage(object):
     def __init__(self, core):
         self.userName          = None
-        self.remarkName          = None
+        self.nickName          = None
         self.updateLock        = Lock()
         self.memberList        = ContactList()
         self.mpList            = ContactList()
@@ -31,14 +31,14 @@ class Storage(object):
     def dumps(self):
         return {
             'userName'          : self.userName,
-            'remarkName'          : self.remarkName,
+            'nickName'          : self.nickName,
             'memberList'        : self.memberList,
             'mpList'            : self.mpList,
             'chatroomList'      : self.chatroomList,
             'lastInputUserName' : self.lastInputUserName, }
     def loads(self, j):
         self.userName = j.get('userName', None)
-        self.remarkName = j.get('remarkName', None)
+        self.nickName = j.get('nickName', None)
         del self.memberList[:]
         for i in j.get('memberList', []):
             self.memberList.append(i)
@@ -100,7 +100,7 @@ class Storage(object):
             elif name is not None:
                 matchList = []
                 for m in self.chatroomList:
-                    if name in m['RemarkName']:
+                    if name in m['NickName']:
                         matchList.append(copy.deepcopy(m))
                 return matchList
     def search_mps(self, name=None, userName=None):
@@ -112,6 +112,6 @@ class Storage(object):
             elif name is not None:
                 matchList = []
                 for m in self.mpList:
-                    if name in m['RemarkName']:
+                    if name in m['NickName']:
                         matchList.append(copy.deepcopy(m))
                 return matchList

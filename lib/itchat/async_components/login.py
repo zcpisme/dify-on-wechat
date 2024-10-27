@@ -119,7 +119,7 @@ async def login(self, enableCmdQR=False, picDir=None, qrCallback=None, EventScan
         utils.clear_screen()
         if os.path.exists(picDir or config.DEFAULT_QR):
             os.remove(picDir or config.DEFAULT_QR)
-    logger.info('Login successfully as %s' % self.storageClass.remarkName)
+    logger.info('Login successfully as %s' % self.storageClass.nickName)
     await self.start_receiving(exitCallback)
     self.isLogging = False
 
@@ -257,7 +257,7 @@ async def web_init(self):
     r = self.s.post(url, params=params, data=json.dumps(data), headers=headers)
     dic = json.loads(r.content.decode('utf-8', 'replace'))
     # deal with login info
-    utils.emoji_formatter(dic['User'], 'RemarkName')
+    utils.emoji_formatter(dic['User'], 'NickName')
     self.loginInfo['InviteStartCount'] = int(dic['InviteStartCount'])
     self.loginInfo['User'] = wrap_user_dict(utils.struct_friend_info(dic['User']))
     self.memberList.append(self.loginInfo['User'])
@@ -265,7 +265,7 @@ async def web_init(self):
     self.loginInfo['synckey'] = '|'.join(['%s_%s' % (item['Key'], item['Val'])
         for item in dic['SyncKey']['List']])
     self.storageClass.userName = dic['User']['UserName']
-    self.storageClass.remarkName = dic['User']['RemarkName']
+    self.storageClass.nickName = dic['User']['NickName']
     # deal with contact list returned when init
     contactList = dic.get('ContactList', [])
     chatroomList, otherList = [], []

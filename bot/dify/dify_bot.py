@@ -39,7 +39,6 @@ class DifyBot(Bot):
             user = None
             if channel_type in ["wx", "wework", "gewechat"]:
                 user = context["msg"].other_user_nickname if context.get("msg") else "default"
-                # print(user)
             elif channel_type in ["wechatcom_app", "wechatmp", "wechatmp_service", "wechatcom_service"]:
                 user = context["msg"].other_user_id if context.get("msg") else "default"
             else:
