@@ -23,41 +23,142 @@ from common.utils import parse_markdown_text
 from common.tmp_dir import TmpDir
 from config import conf
 
+import time
+from threading import Timer, Lock
+
 class DifyBot(Bot):
     def __init__(self):
         super().__init__()
         self.sessions = DifySessionManager(DifySession, model=conf().get("model", const.DIFY))
+        # 新增的属性
+        self.pending_queries = {}  # 存储待处理的查询
+        self.buffer_time = 2.0    # 缓冲时间(秒)
+        self.query_lock = Lock()  # 全局锁
+        self.MAX_QUERY_LENGTH = 1000  # 最大查询长度
+        self.MAX_PENDING_USERS = 100  # 最大等待用户数
+        self.MAX_AGE = 300  # 查询最大存活时间(秒)
 
     def reply(self, query, context: Context=None):
-        # acquire reply content
-        if context.type == ContextType.TEXT or context.type == ContextType.IMAGE_CREATE:
-            if context.type == ContextType.IMAGE_CREATE:
-                query = conf().get('image_create_prefix', ['画'])[0] + query
-            logger.info("[DIFY] query={}".format(query))
-            session_id = context["session_id"]
-            # TODO: 适配除微信以外的其他channel
-            channel_type = conf().get("channel_type", "wx")
-            user = None
-            if channel_type in ["wx", "wework", "gewechat"]:
-                user = (context["msg"].other_user_remarkname or context["msg"].other_user_nickname) if context.get("msg") else "default"
-            elif channel_type in ["wechatcom_app", "wechatmp", "wechatmp_service", "wechatcom_service"]:
-                user = context["msg"].other_user_id if context.get("msg") else "default"
-            else:
-                return Reply(ReplyType.ERROR, f"unsupported channel type: {channel_type}, now dify only support wx, wechatcom_app, wechatmp, wechatmp_service channel")
-            logger.debug(f"[DIFY] dify_user={user}")
-            user = user if user else "default" # 防止用户名为None，当被邀请进的群未设置群名称时用户名为None
-            # FIXME: 群聊与私聊是同一个sessionid，应该区分不同的用户名, 同一个conversation_id下，只允许一个username，否则报错对话不存在
-            session = self.sessions.get_session(session_id, user)
-            logger.debug(f"[DIFY] session={session} query={query}")
+        """处理用户查询的主要方法"""
+        # 处理非文本类型的消息
+        if context.type not in [ContextType.TEXT, ContextType.IMAGE_CREATE]:
+            return Reply(ReplyType.ERROR, "Bot不支持处理{}类型的消息".format(context.type))
 
+        if context.type == ContextType.IMAGE_CREATE:
+            query = conf().get('image_create_prefix', ['画'])[0] + query
+
+        session_id = context["session_id"]
+        logger.info("[DIFY] query={}".format(query))
+
+        # 清理过期查询
+        self.cleanup_old_queries()
+
+        with self.query_lock:
+            # 检查是否达到最大等待用户数
+            if len(self.pending_queries) >= self.MAX_PENDING_USERS and session_id not in self.pending_queries:
+                session = self.sessions.get_session(session_id, self._get_user_identifier(context))
+                return self._reply(query, session, context)
+
+            if session_id in self.pending_queries:
+                with self.pending_queries[session_id]['lock']:
+                    # 检查合并后的查询长度
+                    total_length = len(self.pending_queries[session_id]['query']) + len(query)
+                    if total_length > self.MAX_QUERY_LENGTH:
+                        # 处理当前缓存的查询
+                        self._process_buffered_query(session_id, context)
+                        # 创建新的查询缓存
+                        return self._create_new_query(query, session_id, context)
+
+                    # 取消之前的定时器
+                    self.pending_queries[session_id]['timer'].cancel()
+                    # 合并查询
+                    self.pending_queries[session_id]['query'] += "\n" + query
+                    # 更新最后活动时间
+                    self.pending_queries[session_id]['last_active'] = time.time()
+                    # 创建新定时器
+                    timer = Timer(self.buffer_time, self._process_buffered_query, args=[session_id, context])
+                    timer.start()
+                    self.pending_queries[session_id]['timer'] = timer
+            else:
+                # 创建新的待处理查询
+                self._create_new_query(query, session_id, context)
+
+        return None
+
+    def _create_new_query(self, query, session_id, context):
+        """创建新的查询缓存"""
+        logger.info(f"[DIFY] Creating new query buffer for session {session_id}")
+        timer = Timer(self.buffer_time, self._process_buffered_query, args=[session_id, context])
+        self.pending_queries[session_id] = {
+            'query': query,
+            'timer': timer,
+            'lock': Lock(),
+            'created_at': time.time(),
+            'last_active': time.time()
+        }
+        timer.start()
+        return None
+
+    def _process_buffered_query(self, session_id, context):
+        """处理缓存的查询"""
+        try:
+            with self.query_lock:
+                if session_id not in self.pending_queries:
+                    return None
+                
+                with self.pending_queries[session_id]['lock']:
+                    query = self.pending_queries[session_id]['query']
+                    logger.info(f"[DIFY] Processing buffered query for session {session_id}, merged query length: {len(query)}")
+                    # 清理缓存
+                    self.pending_queries[session_id]['timer'].cancel()
+                    del self.pending_queries[session_id]
+
+            # 获取session并处理查询
+            session = self.sessions.get_session(session_id, self._get_user_identifier(context))
             reply, err = self._reply(query, session, context)
-            if err != None:
+            
+            if err is not None:
                 error_msg = conf().get("error_reply", "我暂时遇到了一些问题，请您稍后重试~")
                 reply = Reply(ReplyType.TEXT, error_msg)
+
+            # 发送回复
+            if context.get("channel"):
+                # 处理reply可能是列表的情况
+                if isinstance(reply, list):
+                    for r in reply:
+                        context["channel"].send(r, context)
+                else:
+                    context["channel"].send(reply, context)
+                    
             return reply
+        except Exception as e:
+            logger.error(f"Error processing buffered query: {e}")
+            return None
+
+    def cleanup_old_queries(self):
+        """清理过期的查询"""
+        current_time = time.time()
+        with self.query_lock:
+            for session_id in list(self.pending_queries.keys()):
+                try:
+                    with self.pending_queries[session_id]['lock']:
+                        if current_time - self.pending_queries[session_id]['last_active'] > self.MAX_AGE:
+                            self.pending_queries[session_id]['timer'].cancel()
+                            del self.pending_queries[session_id]
+                except Exception as e:
+                    logger.error(f"Error cleaning up query for session {session_id}: {e}")
+
+    def _get_user_identifier(self, context):
+        """获取用户标识符"""
+        channel_type = conf().get("channel_type", "wx")
+        
+        if channel_type in ["wx", "wework", "gewechat"]:
+            return (context["msg"].other_user_remarkname or context["msg"].other_user_nickname) if context.get("msg") else "default"
+        elif channel_type in ["wechatcom_app", "wechatmp", "wechatmp_service", "wechatcom_service"]:
+            return context["msg"].other_user_id if context.get("msg") else "default"
         else:
-            reply = Reply(ReplyType.ERROR, "Bot不支持处理{}类型的消息".format(context.type))
-            return reply
+            logger.warning(f"Unsupported channel type: {channel_type}")
+            return "default"
 
     # TODO: delete this function
     def _get_payload(self, query, session: DifySession, response_mode):
@@ -118,17 +219,17 @@ class DifyBot(Bot):
         sentences = [s for s in sentences if s]
         
         # If fewer than three sentences, return as is and pad with empty strings
-        if len(sentences) < 3:
+        if len(sentences) < 5:
             return sentences
         
         # If more than three, attempt to split evenly
         total_length = sum(len(s) for s in sentences)
-        avg_length = total_length // 3  # Target length per part
+        avg_length = total_length // 5  # Target length per part
         
         result = []
         temp = ""
         for s in sentences:
-            if len(temp) + len(s) <= avg_length or len(result) >= 2:
+            if len(temp) + len(s) <= avg_length or len(result) >= 4:
                 temp += s  # Accumulate current segment
             else:
                 result.append(temp)  # Add to results when segment reaches desired length
