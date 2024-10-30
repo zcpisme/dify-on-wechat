@@ -5,6 +5,7 @@ import mimetypes
 import random
 import threading
 import json
+import re
 
 from PIL import Image
 
@@ -109,7 +110,33 @@ class DifyBot(Bot):
                         # In case there's a parsing error, skip to the next line
                         continue
         return rsp_data, complete_answer
+    
+    def split_sentence(self, sentence):
+        # Using regex to split by period, question mark, or exclamation mark, keeping the delimiter
+        sentences = re.split(r'(?<=[。？！])', sentence)
+        # Remove any empty strings from the result
+        sentences = [s for s in sentences if s]
+        
+        # If fewer than three sentences, return as is and pad with empty strings
+        if len(sentences) < 3:
+            return sentences
+        
+        # If more than three, attempt to split evenly
+        total_length = sum(len(s) for s in sentences)
+        avg_length = total_length // 3  # Target length per part
+        
+        result = []
+        temp = ""
+        for s in sentences:
+            if len(temp) + len(s) <= avg_length or len(result) >= 2:
+                temp += s  # Accumulate current segment
+            else:
+                result.append(temp)  # Add to results when segment reaches desired length
+                temp = s  # Reset for new segment
+        result.append(temp)  # Append last segment
 
+        return result
+    
     def _handle_chatbot(self, query: str, session: DifySession, context: Context):
         api_key = self._get_dify_conf(context, "dify_api_key", '')
         api_base = self._get_dify_conf(context, "dify_api_base", "https://api.dify.ai/v1")
@@ -199,7 +226,15 @@ class DifyBot(Bot):
             if is_group:
                 at_prefix = "@" + context["msg"].actual_user_nickname + "\n"
                 content = at_prefix + content
-            final_reply = Reply(ReplyType.TEXT, final_item['content'])
+            try:
+                conA = self.split_sentence(content)
+
+                final_reply = []
+                for c in conA:
+                    final_reply.append(Reply(ReplyType.TEXT, c))
+            except:
+                final_reply = Reply(ReplyType.TEXT, final_item['content'])
+
             # image = self._load_local_image()
             # final_reply = Reply(ReplyType.IMAGE, image)
         elif final_item['type'] == 'image':
@@ -220,7 +255,6 @@ class DifyBot(Bot):
         # 设置dify conversation_id, 依靠dify管理上下文
         if session.get_conversation_id() == '':
             session.set_conversation_id(rsp_data['conversation_id'])
-
         return final_reply, None
 
     def _download_file(self, url):

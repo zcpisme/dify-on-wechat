@@ -173,11 +173,19 @@ class ChatChannel(Channel):
         logger.debug("[chat_channel] ready to decorate reply: {}".format(reply))
 
         # reply的包装步骤
-        if reply and reply.content:
-            reply = self._decorate_reply(context, reply)
+        if type(reply) == list:
+            for rep in reply:
+                if rep and rep.content:
+                    rep = self._decorate_reply(context, rep)
 
-            # reply的发送步骤
-            self._send_reply(context, reply)
+                    # reply的发送步骤
+                    self._send_reply(context, rep)
+        else: 
+            if reply and reply.content:
+                reply = self._decorate_reply(context, reply)
+
+                # reply的发送步骤
+                self._send_reply(context, reply)
 
     def _generate_reply(self, context: Context, reply: Reply = Reply()) -> Reply:
         e_context = PluginManager().emit_event(
