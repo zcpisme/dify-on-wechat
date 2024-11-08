@@ -6,7 +6,10 @@ import random
 import threading
 import json
 import re
-
+import time
+from threading import Timer, Lock
+from datetime import datetime, timedelta
+import pytz
 from PIL import Image
 
 import requests
@@ -32,11 +35,91 @@ class DifyBot(Bot):
         self.sessions = DifySessionManager(DifySession, model=conf().get("model", const.DIFY))
         # 新增的属性
         self.pending_queries = {}  # 存储待处理的查询
-        self.buffer_time = 2.0    # 缓冲时间(秒)
+        self.buffer_time = 15.0    # 缓冲时间(秒)
         self.query_lock = Lock()  # 全局锁
         self.MAX_QUERY_LENGTH = 1000  # 最大查询长度
         self.MAX_PENDING_USERS = 100  # 最大等待用户数
         self.MAX_AGE = 300  # 查询最大存活时间(秒)
+
+        self.greeting_timers = {}  # 存储问候计时器
+        self.greeting_lock = Lock()  # 问候计时器的锁
+        self.MIN_GREETING_INTERVAL = 5 * 3600  # 5小时
+        self.MAX_GREETING_INTERVAL = 7 * 3600  # 7小时
+        self.beijing_tz = pytz.timezone('Asia/Shanghai')
+
+    def _is_greeting_time(self):
+        """检查当前是否是合适的问候时间（上午或晚上）"""
+        now = datetime.now(self.beijing_tz)
+        hour = now.hour
+        # 上午 8-12 点或晚上 7-10 点
+        return (8 <= hour < 12) or (19 <= hour < 22)
+
+    def _schedule_next_greeting(self, session_id, context):
+        """安排下一次问候"""
+        try:
+            # 生成5-7小时之间的随机间隔时间
+            random_interval = random.uniform(self.MIN_GREETING_INTERVAL, self.MAX_GREETING_INTERVAL)
+            
+            # 计算下一个合适的问候时间
+            now = datetime.now(self.beijing_tz)
+            next_time = now + timedelta(seconds=random_interval)
+            
+            # 如果下一次问候时间不在合适的时间段，调整到下一个合适的时间
+            if not self._is_greeting_time():
+                if next_time.hour < 8:
+                    # 调整到当天上午8点
+                    next_time = next_time.replace(hour=8, minute=0, second=0)
+                elif 12 <= next_time.hour < 19:
+                    # 调整到当天晚上7点
+                    next_time = next_time.replace(hour=19, minute=0, second=0)
+                elif next_time.hour >= 22:
+                    # 调整到第二天上午8点
+                    next_time = (next_time + timedelta(days=1)).replace(hour=8, minute=0, second=0)
+
+            # 计算延迟秒数
+            delay = (next_time - now).total_seconds()
+            if delay < 0:
+                delay = self.GREETING_INTERVAL
+
+            with self.greeting_lock:
+                # 取消现有的计时器（如果存在）
+                if session_id in self.greeting_timers and self.greeting_timers[session_id]:
+                    self.greeting_timers[session_id].cancel()
+                
+                # 创建新的计时器
+                timer = Timer(delay, self._send_greeting, args=[session_id, context])
+                timer.start()
+                self.greeting_timers[session_id] = timer
+                
+                logger.info(f"[DIFY] Scheduled next greeting for session {session_id} in {delay:.2f} sec")
+        except Exception as e:
+            logger.error(f"Error scheduling next greeting: {e}")
+
+    def _send_greeting(self, session_id, context):
+        """发送问候消息"""
+        try:
+            if self._is_greeting_time():
+                # 创建一个新的问候查询
+                greeting_query = "[系统招呼]随便打声招呼"
+                logger.info(f"[DIFY] Sending greeting to session {session_id}")
+                
+                # 获取session并处理查询
+                session = self.sessions.get_session(session_id, self._get_user_identifier(context))
+                reply, err = self._reply(greeting_query, session, context)
+                
+                if err is not None:
+                    logger.error(f"Error sending greeting: {err}")
+                elif context.get("channel"):
+                    if isinstance(reply, list):
+                        for r in reply:
+                            context["channel"].send(r, context)
+                    else:
+                        context["channel"].send(reply, context)
+            
+            # 安排下一次问候
+            self._schedule_next_greeting(session_id, context)
+        except Exception as e:
+            logger.error(f"Error in send_greeting: {e}")
 
     def reply(self, query, context: Context=None):
         """处理用户查询的主要方法"""
@@ -49,6 +132,10 @@ class DifyBot(Bot):
 
         session_id = context["session_id"]
         logger.info("[DIFY] query={}".format(query))
+
+        with self.greeting_lock:
+            if session_id in self.greeting_timers and self.greeting_timers[session_id]:
+                self.greeting_timers[session_id].cancel()
 
         # 清理过期查询
         self.cleanup_old_queries()
@@ -100,7 +187,6 @@ class DifyBot(Bot):
         return None
 
     def _process_buffered_query(self, session_id, context):
-        """处理缓存的查询"""
         try:
             with self.query_lock:
                 if session_id not in self.pending_queries:
@@ -113,7 +199,6 @@ class DifyBot(Bot):
                     self.pending_queries[session_id]['timer'].cancel()
                     del self.pending_queries[session_id]
 
-            # 获取session并处理查询
             session = self.sessions.get_session(session_id, self._get_user_identifier(context))
             reply, err = self._reply(query, session, context)
             
@@ -121,22 +206,24 @@ class DifyBot(Bot):
                 error_msg = conf().get("error_reply", "我暂时遇到了一些问题，请您稍后重试~")
                 reply = Reply(ReplyType.TEXT, error_msg)
 
-            # 发送回复
             if context.get("channel"):
-                # 处理reply可能是列表的情况
                 if isinstance(reply, list):
                     for r in reply:
                         context["channel"].send(r, context)
                 else:
                     context["channel"].send(reply, context)
-                    
+
+            # 用户输入处理完成后，等待buffer_time后再安排问候
+            timer = Timer(self.buffer_time, lambda: self._schedule_next_greeting(session_id, context))
+            timer.start()
+            logger.info(f"[DIFY] 将在 {self.buffer_time} 秒后安排问候计时器 {session_id}")
             return reply
         except Exception as e:
             logger.error(f"Error processing buffered query: {e}")
             return None
-
+        
     def cleanup_old_queries(self):
-        """清理过期的查询"""
+        """清理过期的查询和问候计时器"""
         current_time = time.time()
         with self.query_lock:
             for session_id in list(self.pending_queries.keys()):
@@ -144,6 +231,11 @@ class DifyBot(Bot):
                     with self.pending_queries[session_id]['lock']:
                         if current_time - self.pending_queries[session_id]['last_active'] > self.MAX_AGE:
                             self.pending_queries[session_id]['timer'].cancel()
+                            # 同时清理对应的问候计时器
+                            with self.greeting_lock:
+                                if session_id in self.greeting_timers:
+                                    self.greeting_timers[session_id].cancel()
+                                    del self.greeting_timers[session_id]
                             del self.pending_queries[session_id]
                 except Exception as e:
                     logger.error(f"Error cleaning up query for session {session_id}: {e}")
@@ -214,22 +306,22 @@ class DifyBot(Bot):
     
     def split_sentence(self, sentence):
         # Using regex to split by period, question mark, or exclamation mark, keeping the delimiter
-        sentences = re.split(r'(?<=[。？！])', sentence)
+        sentences = re.split(r'(?<=[。？！? ! ])', sentence)
         # Remove any empty strings from the result
         sentences = [s for s in sentences if s]
         
         # If fewer than three sentences, return as is and pad with empty strings
-        if len(sentences) < 5:
+        if len(sentences) < 4:
             return sentences
         
         # If more than three, attempt to split evenly
         total_length = sum(len(s) for s in sentences)
-        avg_length = total_length // 5  # Target length per part
+        avg_length = total_length // 4  # Target length per part
         
         result = []
         temp = ""
         for s in sentences:
-            if len(temp) + len(s) <= avg_length or len(result) >= 4:
+            if len(temp) + len(s) <= avg_length or len(result) >= 3:
                 temp += s  # Accumulate current segment
             else:
                 result.append(temp)  # Add to results when segment reaches desired length
