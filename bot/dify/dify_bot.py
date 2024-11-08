@@ -43,10 +43,40 @@ class DifyBot(Bot):
 
         self.greeting_timers = {}  # 存储问候计时器
         self.greeting_lock = Lock()  # 问候计时器的锁
-        self.MIN_GREETING_INTERVAL = 5 * 3600  # 5小时
-        self.MAX_GREETING_INTERVAL = 7 * 3600  # 7小时
+        self.MIN_GREETING_INTERVAL = 12 * 3600  # 5小时
+        self.MAX_GREETING_INTERVAL = 14 * 3600  # 7小时
         self.beijing_tz = pytz.timezone('Asia/Shanghai')
 
+        self.auto_greet_users_file = "auto_greet_users.json"  # 白名单文件路径
+        self.last_whitelist_check = 0
+        self.whitelist_check_interval = 60  # 检查白名单的间隔时间(秒)
+        self.auto_greet_users = self._load_auto_greet_users()
+
+    def _load_auto_greet_users(self):
+        """动态加载自动问候用户白名单"""
+        try:
+            if os.path.exists(self.auto_greet_users_file):
+                with open(self.auto_greet_users_file, 'r', encoding='utf-8') as f:
+                    return set(json.load(f))
+            return set()
+        except Exception as e:
+            logger.error(f"Error loading auto greet users: {e}")
+            return set()
+
+    def _should_update_whitelist(self):
+        """检查是否需要更新白名单"""
+        current_time = time.time()
+        if current_time - self.last_whitelist_check >= self.whitelist_check_interval:
+            self.auto_greet_users = self._load_auto_greet_users()
+            self.last_whitelist_check = current_time
+            return True
+        return False
+
+    def _is_user_in_whitelist(self, user_identifier):
+        """检查用户是否在白名单中"""
+        self._should_update_whitelist()
+        return user_identifier in self.auto_greet_users
+    
     def _is_greeting_time(self):
         """检查当前是否是合适的问候时间（上午或晚上）"""
         now = datetime.now(self.beijing_tz)
@@ -57,6 +87,14 @@ class DifyBot(Bot):
     def _schedule_next_greeting(self, session_id, context):
         """安排下一次问候"""
         try:
+            # 获取用户标识符
+            user_identifier = self._get_user_identifier(context)
+            
+            # 检查用户是否在白名单中
+            if not self._is_user_in_whitelist(user_identifier):
+                logger.info(f"User {user_identifier} not in auto greet whitelist, skipping greeting")
+                return
+            
             # 生成5-7小时之间的随机间隔时间
             random_interval = random.uniform(self.MIN_GREETING_INTERVAL, self.MAX_GREETING_INTERVAL)
             
@@ -98,6 +136,13 @@ class DifyBot(Bot):
     def _send_greeting(self, session_id, context):
         """发送问候消息"""
         try:
+            user_identifier = self._get_user_identifier(context)
+            
+            # 再次检查用户是否在白名单中
+            if not self._is_user_in_whitelist(user_identifier):
+                logger.info(f"User {user_identifier} no longer in whitelist, cancelling greeting")
+                return
+            
             if self._is_greeting_time():
                 # 创建一个新的问候查询
                 greeting_query = "[系统招呼]随便打声招呼"
