@@ -245,6 +245,24 @@ class DifyBot(Bot):
                     del self.pending_queries[session_id]
 
             session = self.sessions.get_session(session_id, self._get_user_identifier(context))
+            if context.get("isgroup", False):
+                # 群聊：根据是否是共享会话群来决定是否设置用户信息
+                if not context.get("is_shared_session_group", False):
+                    # 非共享会话群：设置发送者信息
+                    session.set_user_info(context["msg"].actual_user_id, context["msg"].actual_user_nickname)
+                else:
+                    # 共享会话群：不设置用户信息
+                    session.set_user_info('', '')
+                # 设置群聊信息
+                session.set_room_info(context["msg"].other_user_id, context["msg"].other_user_nickname)
+            else:
+                # 私聊：使用发送者信息作为用户信息，房间信息留空
+                session.set_user_info(context["msg"].other_user_id, context["msg"].other_user_nickname)
+                session.set_room_info('', '')
+
+            # 打印设置的session信息
+            logger.debug(f"[DIFY] Session user and room info - user_id: {session.get_user_id()}, user_name: {session.get_user_name()}, room_id: {session.get_room_id()}, room_name: {session.get_room_name()}")
+            logger.debug(f"[DIFY] session={session} query={query}")
             reply, err = self._reply(query, session, context)
             
             if err is not None:
@@ -291,7 +309,7 @@ class DifyBot(Bot):
         
         if channel_type in ["wx", "wework", "gewechat"]:
             return (context["msg"].other_user_remarkname or context["msg"].other_user_nickname) if context.get("msg") else "default"
-        elif channel_type in ["wechatcom_app", "wechatmp", "wechatmp_service", "wechatcom_service"]:
+        elif channel_type in ["wechatcom_app", "wechatmp", "wechatmp_service", "wechatcom_service", "web"]:
             return context["msg"].other_user_id if context.get("msg") else "default"
         else:
             logger.warning(f"Unsupported channel type: {channel_type}")
