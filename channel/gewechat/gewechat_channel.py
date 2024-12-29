@@ -2,6 +2,7 @@ import os
 import json
 import web
 from urllib.parse import urlparse
+import re
 
 from bridge.context import Context
 from bridge.reply import Reply, ReplyType
@@ -103,15 +104,44 @@ class GeWeChatChannel(ChatChannel):
         app = web.application(urls, globals(), autoreload=False)
         web.httpserver.runsimple(app.wsgifunc(), ("0.0.0.0", port))
 
+    def split_sentence(self, sentence, n = 4):
+        # Using regex to split by period, question mark, or exclamation mark, keeping the delimiter
+        sentences = re.split(r'(?<=[。？！? ! ])', sentence)
+        # Remove any empty strings from the result
+        sentences = [s for s in sentences if s]
+        
+        # If fewer than three sentences, return as is and pad with empty strings
+        if len(sentences) < n:
+            return sentences
+        
+        # If more than three, attempt to split evenly
+        total_length = sum(len(s) for s in sentences)
+        avg_length = total_length // n  # Target length per part
+        
+        result = []
+        temp = ""
+        for s in sentences:
+            if len(temp) + len(s) <= avg_length or len(result) >= n - 1:
+                temp += s  # Accumulate current segment
+            else:
+                result.append(temp)  # Add to results when segment reaches desired length
+                temp = s  # Reset for new segment
+        result.append(temp)  # Append last segment
+
+        return result
+
     def send(self, reply: Reply, context: Context):
         receiver = context["receiver"]
         gewechat_message = context.get("msg")
         if reply.type in [ReplyType.TEXT, ReplyType.ERROR, ReplyType.INFO]:
             reply_text = reply.content
+            reply_list = self.split_sentence(reply_text, n=4)
             ats = ""
             if gewechat_message and gewechat_message.is_group:
                 ats = gewechat_message.actual_user_id
-            self.client.post_text(self.app_id, receiver, reply_text, ats)
+            # self.client.post_text(self.app_id, receiver, reply_text, ats)
+            for rep in reply_list:
+                self.client.post_text(self.app_id, receiver, rep, ats)
             logger.info("[gewechat] Do send text to {}: {}".format(receiver, reply_text))
         elif reply.type == ReplyType.VOICE:
             try:
