@@ -4,17 +4,17 @@ import web
 from urllib.parse import urlparse
 import re
 
-from bridge.context import Context
+from bridge.context import Context, ContextType
 from bridge.reply import Reply, ReplyType
 from channel.chat_channel import ChatChannel
 from channel.gewechat.gewechat_message import GeWeChatMessage
 from common.log import logger
 from common.singleton import singleton
 from common.tmp_dir import TmpDir
-from common.utils import compress_imgfile, fsize
 from config import conf, save_config
 from lib.gewechat import GewechatClient
 from voice.audio_convert import mp3_to_silk
+import uuid
 
 MAX_UTF8_LEN = 2048
 
@@ -165,14 +165,18 @@ class GeWeChatChannel(ChatChannel):
             logger.info("[gewechat] sendImage url={}, receiver={}".format(img_url, receiver))
         elif reply.type == ReplyType.IMAGE:
             image_storage = reply.content
-            sz = fsize(image_storage)
-            if sz >= 10 * 1024 * 1024:
-                logger.info("[gewechat] image too large, ready to compress, sz={}".format(sz))
-                image_storage = compress_imgfile(image_storage, 10 * 1024 * 1024 - 1)
-                logger.info("[gewechat] image compressed, sz={}".format(fsize(image_storage)))
             image_storage.seek(0)
-            self.client.post_image(self.app_id, receiver, image_storage.read())
-            logger.info("[gewechat] sendImage, receiver={}".format(receiver))
+            # Save image to tmp directory
+            img_data = image_storage.read()
+            img_file_name = f"img_{str(uuid.uuid4())}.png"
+            img_file_path = TmpDir().path() + img_file_name
+            with open(img_file_path, "wb") as f:
+                f.write(img_data)
+            # Construct callback URL
+            callback_url = conf().get("gewechat_callback_url")
+            img_url = callback_url + "?file=" + img_file_path
+            self.client.post_image(self.app_id, receiver, img_url)
+            logger.info("[gewechat] sendImage, receiver={}, url={}".format(receiver, img_url))
 
 class Query:
     def GET(self):
@@ -208,6 +212,21 @@ class Query:
             return "success"
 
         gewechat_msg = GeWeChatMessage(data, channel.client)
+        
+        # 忽略(可能是)系统通知的消息 TODO：待验证
+        if gewechat_msg.ctype == ContextType.SYS_NOTICE:
+            logger.info(f"[gewechat] ignore system notice message")
+            return "success"
+
+        # 根据微信原始id规律，暂时通过"wxid_"开头判断是用户消息，其他一律判断为公众号或其他非用户消息
+        # TODO：微信曾开放过修改原始id的权限，可能存在不是"wxid_"开头的用户消息，存在误判
+        if not gewechat_msg.actual_user_id or not gewechat_msg.actual_user_id.startswith("wxid_"):
+            logger.info(f"[gewechat] ignore message from non-user account: {gewechat_msg.actual_user_id}, content: {gewechat_msg.content}")
+            return "success"
+
+        if gewechat_msg.my_msg:
+            logger.info(f"[gewechat] ignore message from myself: {gewechat_msg.actual_user_id}, content: {gewechat_msg.content}")
+            return "success"
         
         context = channel._compose_context(
             gewechat_msg.ctype,
