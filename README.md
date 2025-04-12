@@ -63,6 +63,14 @@ Dify接入微信生态的**详细教程**请查看文章 [**手摸手教你把 D
 
 欢迎加入 **🤖大模型/知识库/bot交流群**，不仅能及时**获取本项目版本更新**公告，还可以一起**交流AI相关知识**！
 
+另外，最近群里在组织每周AI技术分享，欢迎大家进群观看，另外也欢迎大家报名来分享，主讲嘉宾可以获得一个月ChatGPT Plus 或 Cursor 会员福利，欢迎[填写问卷](https://uwyv5qab1jg.feishu.cn/share/base/form/shrcnAOQh3XKVaFTGT6Fg4Eyh0f)报名
+
+往期分享回放
+
+[AI技术分享第一期 dify自定义工具](https://meeting.tencent.com/cw/Kmd8V1OQf6)
+
+[AI技术分享第二期 AI出海](https://meeting.tencent.com/cw/2qPr3OQd1e)
+
 <div align="center">
 
 |<img width="240" src="./docs/images/wechat_group_1.jpg">|<img width="240" src="./docs/images/wechat_group_2.jpg">|
