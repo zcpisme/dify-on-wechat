@@ -368,7 +368,7 @@ webui启动方式
 需要Windows环境，接入详情请查看 [chatgpt-on-wechat#2562](https://github.com/zhayujie/chatgpt-on-wechat/pull/2562)
 
 # 更新日志
-- 2025/04/12 修复jina_sum插件无法总结微信链接，同步上游最新功能，支持 [wcf](https://github.com/lich0821/WeChatFerry) 微信通道
+- 2025/04/12 修复jina_sum插件无法总结微信链接，感谢 [sofs2005](https://github.com/sofs2005/jina_sum) 的代码；同步上游最新功能，支持 [wcf](https://github.com/lich0821/WeChatFerry) 微信通道
 - 2025/01/24 优化web ui，可以通过web ui登录退出gewechat微信
 - 2025/01/06 修复在微信群中微信账号无法识别命令的bug，感谢[**sofs2005**](https://github.com/sofs2005)贡献的代码
 - 2025/01/04 修复gewechat自动回复公众号等官方账号消息的bug，感谢[**benxiaohai86**](https://github.com/benxiaohai86)提供的过滤思路
