@@ -350,8 +350,26 @@ deepseek和openai可以共用一套api lib，，默认model是`deepseek-chat`
   "open_ai_api_base": "https://api.deepseek.com/v1"
 }
 ```
+## 11. web ui优化
+
+webui启动方式
+- 源码：python web_ui.py
+- docker: 设置环境变量 DIFY_ON_WECHAT_EXEC: 'python web_ui.py'
+- 访问 http://服务器ip:7860 ，输入默认账号密码 dow/dify-on-wechat
+
+可以通过web ui登录退出gewechat微信，查看状态，重启服务
+
+详情请查看文档 [gradio web ui](./docs/webui/README.md)
+
+![image](https://github.com/user-attachments/assets/6735e4e4-bc6d-4b8a-9854-a3dcf877e3eb)
+
+## 12. 同步上游wcf通道
+
+需要Windows环境，接入详情请查看 [chatgpt-on-wechat#2562](https://github.com/zhayujie/chatgpt-on-wechat/pull/2562)
 
 # 更新日志
+- 2025/04/12 修复jina_sum插件无法总结微信链接，同步上游最新功能，支持 [wcf](https://github.com/lich0821/WeChatFerry) 微信通道
+- 2025/01/24 优化web ui，可以通过web ui登录退出gewechat微信
 - 2025/01/06 修复在微信群中微信账号无法识别命令的bug，感谢[**sofs2005**](https://github.com/sofs2005)贡献的代码
 - 2025/01/04 修复gewechat自动回复公众号等官方账号消息的bug，感谢[**benxiaohai86**](https://github.com/benxiaohai86)提供的过滤思路
 - 2024/12/29 支持gewechat发送语音条消息
